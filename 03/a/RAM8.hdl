@@ -16,4 +16,21 @@ CHIP RAM8 {
 
     PARTS:
     // Put your code here:
+
+    // Use dmux to control which register received load assertion
+    DMux8Way(in=load, sel=address, a=r0, b=r1, c=r2, d=r3, e=r4, f=r5, g=r6, h=r7);
+
+    // Store value in register depending on load assertion
+    Register(in=in, load=r0, out=r0Out);
+    Register(in=in, load=r1, out=r1Out);
+    Register(in=in, load=r2, out=r2Out);
+    Register(in=in, load=r3, out=r3Out);
+    Register(in=in, load=r4, out=r4Out);
+    Register(in=in, load=r5, out=r5Out);
+    Register(in=in, load=r6, out=r6Out);
+    Register(in=in, load=r7, out=r7Out);
+
+    // Return value from given address
+    Mux8Way16(sel=address, a=r0Out, b=r1Out, c=r2Out, d=r3Out, e=r4Out, f=r5Out, g=r6Out, h=r7Out, out=out);
+
 }

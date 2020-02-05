@@ -16,4 +16,20 @@ CHIP RAM64 {
 
     PARTS:
     // Put your code here:
+    // Selecting registers from RAM64 involves use of 6bit address xxxyyy
+    // xxx (MSB) addresses a particular RAM8 chip
+    // yyy (LSB) addresses the register in that RAM8 chip
+
+    DMux8Way(in=load, sel=address[3..5], a=r0, b=r1, c=r2, d=r3, e=r4, f=r5, g=r6, h=r7);
+
+    RAM8(in=in, load=r0, address=address[0..2], out=r0Out);
+    RAM8(in=in, load=r1, address=address[0..2], out=r1Out);
+    RAM8(in=in, load=r2, address=address[0..2], out=r2Out);
+    RAM8(in=in, load=r3, address=address[0..2], out=r3Out);
+    RAM8(in=in, load=r4, address=address[0..2], out=r4Out);
+    RAM8(in=in, load=r5, address=address[0..2], out=r5Out);
+    RAM8(in=in, load=r6, address=address[0..2], out=r6Out);
+    RAM8(in=in, load=r7, address=address[0..2], out=r7Out);
+
+    Mux8Way16(a=r0Out, b=r1Out, c=r2Out, d=r3Out, e=r4Out, f=r5Out, g=r6Out, h=r7Out, sel=address[3..5], out=out);
 }

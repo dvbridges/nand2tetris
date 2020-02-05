@@ -42,5 +42,37 @@ CHIP ALU {
         ng; // 1 if (out < 0),  0 otherwise
 
     PARTS:
-   // Put you code here:
+        // Put you code here:
+        // Zero output
+        Mux16(a=x, sel=zx, out=zerodX);
+        Mux16(a=y, sel=zy, out=zerodY);
+
+        // Negate output
+        Not16(in=zerodX, out=negatedX);
+        Not16(in=zerodY, out=negatedY);
+        
+        // Return x,y
+        Mux16(a=zerodX, b=negatedX, sel=nx, out=nxOut);
+        Mux16(a=zerodY, b=negatedY, sel=ny, out=nyOut);
+
+        // Calulate f values
+        And16(a=nxOut, b=nyOut, out=XandY);
+        Add16(a=nxOut, b=nyOut, out=XaddY);
+
+        // Select f values
+        Mux16(a=XandY, b=XaddY, sel=f, out=fOut);
+        Not16(in=fOut, out=notOut);
+
+        // Return final vals
+        // firstOut: positive sign magnitude numbers always start with 0, neg sign start with 1.
+        Mux16(a=fOut, b=notOut, sel=no, out=out, out[15]=firstOut, out[0..7]=finalLeft, out[8..15]=finalRight);
+        
+        // Calculate zr
+        Or8Way(in=finalLeft, out=zr1);
+        Or8Way(in=finalRight, out=zr2);
+        Or(a=zr1, b=zr2, out=zrFin);
+        Not(in=zrFin, out=zr);
+
+        // Calculate ng
+        And(a=firstOut, b=true, out=ng);
 }
