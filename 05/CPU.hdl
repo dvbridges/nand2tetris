@@ -39,15 +39,16 @@ CHIP CPU {
         pc[15];          // address of next instruction
 
     PARTS:
-    // Put your code here:
-
-    // Destination A if either dest or an a-instruction
+    // Parse some commands
     Not(in=instruction[15], out=isAddress);
+    Not(in=isAddress, out=isInstruction);
     Or(a=instruction[5], b=isAddress, out=writeA);
+    And(a=instruction[4], b=isInstruction, out=writeD);
+    And(a=instruction[3], b=isInstruction, out=writeM, out=writeToMem);   
     
     // if 1, return ALU, if 0, return instruction 
     // Note, a = 0, b = 1
-    Mux16(a=instruction, b=aluToA, sel=instruction[15], out=toRegA);
+    Mux16(a=instruction, b=aluToA, sel=isInstruction, out=toRegA);
 
     // Write to A 
     ARegister(in=toRegA, load=writeA, out=regAtoMux, out=regAtoPC, out[0..14]=addressM);
@@ -63,12 +64,10 @@ CHIP CPU {
         out=aluToD, out=aluToA, out=toMem, 
         zr=zr1, ng=ng1);
 
-    // Write to Memory
-    And(a=instruction[3], b=instruction[15], out=writeM, out=writeToMem);
+    // Write to M
     Mux16(a=false, b=toMem, sel=writeToMem, out=outM);
 
-    // Destination D
-    And(a=instruction[15], b=instruction[4], out=writeD);
+    // Write to D
     DRegister(in=aluToD, load=writeD, out=dOut);
 
     // Program counter
@@ -80,8 +79,9 @@ CHIP CPU {
     And(a=noConds, b=instruction[0], out=j3);
     Or(a=j1, b=j2, out=j1j2); 
     Or(a=j1j2, b=j3, out=j1j2j3);
-    And(a=instruction[15], b=j1j2j3, out=jump);
+    And(a=isInstruction, b=j1j2j3, out=jump);
     Not(in=jump, out=increment);
+    // Set program counter
     PC(in=regAtoPC, load=jump, inc=increment, reset=reset, out[0..14]=pc);
 
     
