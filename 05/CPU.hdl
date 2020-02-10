@@ -40,4 +40,49 @@ CHIP CPU {
 
     PARTS:
     // Put your code here:
+
+    // Destination A if either dest or an a-instruction
+    Not(in=instruction[15], out=isAddress);
+    Or(a=instruction[5], b=isAddress, out=writeA);
+    
+    // if 1, return ALU, if 0, return instruction 
+    // Note, a = 0, b = 1
+    Mux16(a=instruction, b=aluToA, sel=instruction[15], out=toRegA);
+
+    // Write to A 
+    ARegister(in=toRegA, load=writeA, out=regAtoMux, out=regAtoPC, out[0..14]=addressM);
+
+    // Determine address entry into ALU
+    // Note, a = 0, b = 1
+    Mux16(a=regAtoMux, b=inM, sel=instruction[12], out=addressToALU);
+
+    // Compute instruction
+    ALU(x=dOut, y=addressToALU, zx=instruction[11], nx=instruction[10], 
+        zy=instruction[9], ny=instruction[8], 
+        f=instruction[7], no=instruction[6], 
+        out=aluToD, out=aluToA, out=toMem, 
+        zr=zr1, ng=ng1);
+
+    // Write to Memory
+    And(a=instruction[3], b=instruction[15], out=writeM, out=writeToMem);
+    Mux16(a=false, b=toMem, sel=writeToMem, out=outM);
+
+    // Destination D
+    And(a=instruction[15], b=instruction[4], out=writeD);
+    DRegister(in=aluToD, load=writeD, out=dOut);
+
+    // Program counter
+    And(a=zr1, b=instruction[1], out=j2);
+    And(a=ng1, b=instruction[2], out=j1);
+    Not(in=zr1, out=notZR);
+    Not(in=ng1, out=notNG);
+    And(a=notZR, b=notNG, out=noConds);
+    And(a=noConds, b=instruction[0], out=j3);
+    Or(a=j1, b=j2, out=j1j2); 
+    Or(a=j1j2, b=j3, out=j1j2j3);
+    And(a=instruction[15], b=j1j2j3, out=jump);
+    Not(in=jump, out=increment);
+    PC(in=regAtoPC, load=jump, inc=increment, reset=reset, out[0..14]=pc);
+
+    
 }
