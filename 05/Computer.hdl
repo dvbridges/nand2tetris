@@ -19,5 +19,10 @@ CHIP Computer {
     IN reset;
 
     PARTS:
-    // Put your code here:
+    // ROM to receive next instruction address, and send intruction
+    ROM32K(address=pcOut, out=nextInstr);
+    // CPU receives instruction from ROM, and also inputs from Memory and reset button
+    CPU(inM=memOut, instruction=nextInstr, reset=reset, outM=toMem, writeM=writeMem, addressM=nextAddr, pc=pcOut);
+    // Receives CPU output to save to mem at specific address, or return a value at that address
+    Memory(in=toMem, load=writeMem, address=nextAddr, out=memOut);
 }
