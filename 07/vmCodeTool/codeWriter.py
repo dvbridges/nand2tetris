@@ -27,17 +27,6 @@ class CodeWriter(object):
         opType: str
             arithmetic operator as str e.g., 'add'
         """
-        operation = {}
-        operation['neg'] = 'D=-D'
-        operation['not'] = 'D=!D'
-        operation['add'] = 'M=M+D'
-        operation['sub'] = 'M=M-D'
-        operation['and'] = 'M=M&D'
-        operation['or'] = 'M=M|D'
-        operation['eq'] = 'D=M-D\nD;JEQ'
-        operation['gt'] = 'D=M-D\nD;JGT'
-        operation['lt'] = 'D=M-D\nD;JLT'
-        code = ""
 
         if cmd == C_ARITHMETIC:
 
@@ -159,36 +148,100 @@ class CodeWriter(object):
         """
         Write stack operations
         """
-
+        
         if cmd in [C_PUSH, C_POP]:
             if segment == 'constant':
                 name = index
+        
+                if cmd == C_PUSH:
+                    code = (
+                        "@{name}\n"
+                        "D=A\n"
+                        "@SP\n"
+                        "A=M\n"
+                        "M=D\n"
+                        "@SP\n"
+                        "AM=M+1\n"
+                    )
+                elif cmd == C_POP:
+                    code = (
+                        "@SP\n"
+                        "AM=M-1\n"
+                        "D=M\n"
+                        "@{name}\n"
+                        "A=M\n"
+                        "M=D\n"
+                        )
+
+            elif segment == 'temp':
+                name = False
+                if cmd == C_PUSH:
+                    code = (
+                        "@{index}\n"
+                        "D=A\n"
+                        "@R5\n"
+                        "A=D+A\n"
+                        "D=M\n"
+                        "@SP\n"
+                        "A=M\n"
+                        "M=D\n"
+                        "@SP\n"
+                        "AM=M+1\n"
+                    )
+                elif cmd == C_POP:
+                    code = (
+                        "@{index}\n"
+                        "D=A\n"
+                        "@R5\n"
+                        "D=D+A\n"
+                        "@R13\n"
+                        "M=D\n"
+                        "@SP\n"
+                        "AM=M-1\n"
+                        "D=M\n"
+                        "@R13\n"
+                        "A=M\n"
+                        "M=D\n"
+                    )
             else:
                 name = stackOp[segment]
-        
-            if cmd == C_PUSH:
-                code = (
-                    "@{name}\n"
-                    "D=A\n"
-                    "@SP\n"
-                    "A=M\n"
-                    "M=D\n"
-                    "@SP\n"
-                    "AM=M+1\n"
-                )
-            elif cmd == C_POP:
-                code = (
-                    "@SP\n"
-                    "AM=M-1\n"
-                    "D=M\n"
-                    "@{name}\n"
-                    "A=M\n"
-                    "M=D\n"
+                if cmd == C_PUSH:
+                    code = (
+                        "@{index}\n"
+                        "D=A\n"
+                        "@{name}\n"
+                        "A=D+M\n"
+                        "D=M\n"
+                        "@SP\n"
+                        "A=M\n"
+                        "M=D\n"
+                        "@SP\n"
+                        "AM=M+1\n"
+                    )
+                elif cmd == C_POP:
+                    code = (
+                        "@{index}\n"
+                        "D=A\n"
+                        "@{name}\n"
+                        "MD=D+M\n"
+                        "@SP\n"
+                        "AM=M-1\n"
+                        "D=M\n"
+                        "@{name}\n"
+                        "A=M\n"
+                        "M=D\n"
+                        "@{index}\n"
+                        "D=A\n"
+                        "@{name}\n"
+                        "M=M-D\n"
                     )
 
             temp = [line for line in (line.strip() for line in code.split()) if len(line)]
             for line in temp:
-                if '{name}' in line:
-                    line = line.format(name=name)
+                if '{' in line:
+                    line = line.format(
+                        name=name,                     
+                        index=index,
+                        )
                 self.openFile.write(line + '\n')
                 self.lineNo += 1
