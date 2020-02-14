@@ -3,6 +3,7 @@ Module for writing into assembly (.asm) files
 """
 
 from constants import *
+from pathlib import Path
 
 
 class CodeWriter(object):
@@ -11,7 +12,8 @@ class CodeWriter(object):
         self.setFilename(filename)
         self.openFile = open(self.filename, 'w')
         self.lineNo = 0
-        self.varNumber = 0
+        self.staticVar = str(Path(filename).name).split('.')[0]
+        self.staticN = 0
 
     def setFilename(self, filename):
         self.filename = filename.replace('.vm', '.asm')
@@ -148,11 +150,9 @@ class CodeWriter(object):
         """
         Write stack operations
         """
-        
         if cmd in [C_PUSH, C_POP]:
             if segment == 'constant':
                 name = index
-        
                 if cmd == C_PUSH:
                     code = (
                         "@{name}\n"
@@ -173,6 +173,58 @@ class CodeWriter(object):
                         "M=D\n"
                         )
 
+            elif segment == 'static':
+                name = False
+                if cmd == C_PUSH:
+                    code = (
+                        "@{staticName}.{staticN}\n"
+                        "D=A\n"
+                        "@SP\n"
+                        "A=M\n"
+                        "M=D\n"
+                        "@SP\n"
+                        "AM=M+1\n"
+                    )
+                elif cmd == C_POP:
+                    code = (
+                        "@SP\n"
+                        "AM=M-1\n"
+                        "D=M\n"
+                        "@{staticName}.{staticN}\n"
+                        "A=M\n"
+                        "M=D\n"
+                        )
+                self.staticN +=1                
+            elif segment == 'pointer':
+                name = False
+                if cmd == C_PUSH:
+                    code = (
+                        "@{index}\n"
+                        "D=A\n"
+                        "@R3\n"
+                        "A=D+A\n"
+                        "D=M\n"
+                        "@SP\n"
+                        "A=M\n"
+                        "M=D\n"
+                        "@SP\n"
+                        "AM=M+1\n"
+                    )
+                elif cmd == C_POP:
+                    code = (
+                        "@{index}\n"
+                        "D=A\n"
+                        "@R3\n"
+                        "D=D+A\n"
+                        "@R13\n"
+                        "M=D\n"
+                        "@SP\n"
+                        "AM=M-1\n"
+                        "D=M\n"
+                        "@R13\n"
+                        "A=M\n"
+                        "M=D\n"
+                    )
             elif segment == 'temp':
                 name = False
                 if cmd == C_PUSH:
@@ -242,6 +294,8 @@ class CodeWriter(object):
                     line = line.format(
                         name=name,                     
                         index=index,
+                        staticName=self.staticVar,
+                        staticN=self.staticN
                         )
                 self.openFile.write(line + '\n')
                 self.lineNo += 1
