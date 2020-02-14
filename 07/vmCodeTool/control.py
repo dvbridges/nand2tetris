@@ -30,9 +30,11 @@ if __name__ == "__main__":
         segment = vmParseObj.arg1(line)
         # Get arg 2
         index = vmParseObj.arg2(line)
+        # Write comment
+        asmWriter.openFile.write("// {}\n".format(line))
         # Write arithmetic (if command is arithmetic)
-        asmWriter.writeArithmetic(cmd, line, segment)
+        asmWriter.writeArithmetic(cmd, segment)
         # Write stack command
-        asmWriter.writePushPop(cmd, line, index)
+        asmWriter.writePushPop(cmd, segment, index)
     # Close file when complete
     asmWriter.openFile.close()

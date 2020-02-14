@@ -22,3 +22,11 @@ commandLib['not'] = C_ARITHMETIC
 # Stack commands
 commandLib['push'] = C_PUSH
 commandLib['pop'] = C_POP
+
+# stack commands
+stackOp = {}
+stackOp['local'] = 'LCL'
+stackOp['argument'] = 'ARG'
+stackOp['this'] = 'THIS'
+stackOp['that'] = 'THAT'
+stackOp['temp'] = 'TEMP'
