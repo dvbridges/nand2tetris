@@ -177,8 +177,8 @@ class CodeWriter(object):
                 name = False
                 if cmd == C_PUSH:
                     code = (
-                        "@{staticName}.{staticN}\n"
-                        "D=A\n"
+                        "@{staticName}.{index}\n"
+                        "D=M\n"
                         "@SP\n"
                         "A=M\n"
                         "M=D\n"
@@ -190,8 +190,7 @@ class CodeWriter(object):
                         "@SP\n"
                         "AM=M-1\n"
                         "D=M\n"
-                        "@{staticName}.{staticN}\n"
-                        "A=M\n"
+                        "@{staticName}.{index}\n"
                         "M=D\n"
                         )
                 self.staticN +=1                
@@ -275,17 +274,15 @@ class CodeWriter(object):
                         "@{index}\n"
                         "D=A\n"
                         "@{name}\n"
-                        "MD=D+M\n"
+                        "D=D+M\n"
+                        "@R13\n"
+                        "M=D\n"
                         "@SP\n"
                         "AM=M-1\n"
                         "D=M\n"
-                        "@{name}\n"
+                        "@R13\n"
                         "A=M\n"
                         "M=D\n"
-                        "@{index}\n"
-                        "D=A\n"
-                        "@{name}\n"
-                        "M=M-D\n"
                     )
 
             temp = [line for line in (line.strip() for line in code.split()) if len(line)]
@@ -295,7 +292,6 @@ class CodeWriter(object):
                         name=name,                     
                         index=index,
                         staticName=self.staticVar,
-                        staticN=self.staticN
                         )
                 self.openFile.write(line + '\n')
                 self.lineNo += 1

@@ -52,17 +52,15 @@ AM=M+1
 @2
 D=A
 @THIS
-MD=D+M
+D=D+M
+@R13
+M=D
 @SP
 AM=M-1
 D=M
-@THIS
+@R13
 A=M
 M=D
-@2
-D=A
-@THIS
-M=M-D
 // push constant 46
 @46
 D=A
@@ -75,17 +73,15 @@ AM=M+1
 @6
 D=A
 @THAT
-MD=D+M
+D=D+M
+@R13
+M=D
 @SP
 AM=M-1
 D=M
-@THAT
+@R13
 A=M
 M=D
-@6
-D=A
-@THAT
-M=M-D
 // push pointer 0
 @0
 D=A
