@@ -1,3 +1,7 @@
+@256
+D=A
+@SP
+AM=D
 // push constant 3030
 @3030
 D=A

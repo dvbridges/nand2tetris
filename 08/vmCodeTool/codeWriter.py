@@ -14,19 +14,55 @@ class CodeWriter(object):
         self.lineNo = 0
         self.staticVar = str(Path(filename).name).split('.')[0]
         self.staticN = 0
-
-    def setFilename(self, filename):
-        self.filename = filename.replace('.vm', '.asm')
     
+    def write(self, code, strFields=None):
+        
+        temp = [line for line in (line.strip() for line in code.split('\n')) if len(line)]
+        for line in temp:
+            if '{'  in line:
+                line = line.format(**strFields)
+            self.openFile.write(line + '\n')
+            self.lineNo += 1
+    
+    def Close(self):
+        self.openFile.close()
+
     def writeInit(self):
         code = (
             "@256\n"
             "D=A\n"
             "@SP\n"
             "AM=D\n"
-            "(Sys.init)\n"
             )
-        self.openFile.write(code)
+        self.write(code)
+        # self.writeCall("Sys.init", 0)
+        
+
+    def setFilename(self, filename):
+        self.filename = filename.replace('.vm', '.asm')
+
+    def writeLabel(self, cmd, label):
+        if cmd == C_LABEL:
+            self.write("({label})\n", strFields = {'label': label})
+    
+    def writeGoto(self, cmd, label):
+        if cmd == C_GOTO:
+            code = (
+                "@{label}\n"
+                "0; JMP\n"
+            )
+            self.write(code, strFields={'label': label})
+
+    def writeIf(self, cmd, label):
+        if cmd == C_IF:
+            code = (
+                "@SP\n"
+                "AM=M-1\n"
+                "D=M\n"
+                "@{label}\n"
+                "D; JNE\n"
+            )
+            self.write(code, strFields={'label': label})
 
     def writeArithmetic(self, cmd, opType):
         """
@@ -61,7 +97,7 @@ class CodeWriter(object):
                     "D=M\n"
                     "A=A-1\n"
                     "M=M+D\n"
-                ) 
+                )
             if opType == 'sub':
                 code = (
                     "@SP\n"
@@ -89,8 +125,8 @@ class CodeWriter(object):
             if opType == 'eq':
                 code = (
                     "@SP\n"
-                    "AM=M-1\n"      # Get first value
-                    "D=M\n"         # Store it in D
+                    "AM=M-1\n"     # Get first value
+                    "D=M\n"        # Store it in D
                     "A=A-1\n"      # Go to next value
                     "D=M-D\n"      # Calculate diff, store in M and D
                     "@{trueN}\n"   # Get next line address
@@ -109,8 +145,8 @@ class CodeWriter(object):
             if opType == 'gt':
                 code = (
                     "@SP\n"
-                    "AM=M-1\n"      # Get first value
-                    "D=M\n"         # Store it in D
+                    "AM=M-1\n"     # Get first value
+                    "D=M\n"        # Store it in D
                     "A=A-1\n"      # Go to next value
                     "D=M-D\n"      # Calculate diff, store in M and D
                     "@{trueN}\n"   # Get next line address
@@ -130,8 +166,8 @@ class CodeWriter(object):
             if opType == 'lt':
                 code = (
                     "@SP\n"
-                    "AM=M-1\n"      # Get first value
-                    "D=M\n"         # Store it in D
+                    "AM=M-1\n"     # Get first value
+                    "D=M\n"        # Store it in D
                     "A=A-1\n"      # Go to next value
                     "D=M-D\n"      # Calculate diff, store in M and D
                     "@{trueN}\n"   # Get next line address
@@ -147,14 +183,10 @@ class CodeWriter(object):
                     "M=-1\n"
                     "@{falseN}\n"
                 )
-            temp = [line for line in (line.strip() for line in code.split()) if len(line)]
-            for line in temp:
-                if '{' in line:
-                    line = line.format(
-                        trueN=(self.lineNo + 7),
-                        falseN=(self.lineNo + 6))
-                self.openFile.write(line + '\n')
-                self.lineNo += 1
+            self.write(code, strFields={
+                'trueN': self.lineNo + 7,
+                'falseN': self.lineNo + 6
+            })
 
     def writePushPop(self, cmd, segment, index):
         """
@@ -203,7 +235,7 @@ class CodeWriter(object):
                         "@{staticName}.{index}\n"
                         "M=D\n"
                         )
-                self.staticN +=1                
+                self.staticN +=1  # Increment static var counter
             elif segment == 'pointer':
                 name = False
                 if cmd == C_PUSH:
@@ -295,13 +327,9 @@ class CodeWriter(object):
                         "M=D\n"
                     )
 
-            temp = [line for line in (line.strip() for line in code.split()) if len(line)]
-            for line in temp:
-                if '{' in line:
-                    line = line.format(
-                        name=name,                     
-                        index=index,
-                        staticName=self.staticVar,
-                        )
-                self.openFile.write(line + '\n')
-                self.lineNo += 1
+            self.write(code, strFields={
+                'name': name,
+                'index': index,
+                'staticName': self.staticVar
+            })
+            
