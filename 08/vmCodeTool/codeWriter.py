@@ -33,10 +33,9 @@ class CodeWriter(object):
             "D=A\n"
             "@SP\n"
             "AM=D\n"
+            "@Sys.init\n"
             )
         self.write(code)
-        # self.writeCall("Sys.init", 0)
-        
 
     def setFilename(self, filename):
         self.filename = filename.replace('.vm', '.asm')
@@ -63,6 +62,149 @@ class CodeWriter(object):
                 "D; JNE\n"
             )
             self.write(code, strFields={'label': label})
+        
+    def writeCall(self, cmd, fName, nArgs):
+        if cmd == C_CALL:
+            code = (
+                "@RETURN_{fName}\n"
+                "D=A\n"
+                "@SP\n"
+                "A=M\n"
+                "M=D\n"
+                "AM=M+1\n"
+                "@LCL\n"
+                "D=M\n"
+                "@SP\n"
+                "A=M\n"
+                "M=D\n"
+                "AM=M+1\n"
+                "@ARG\n"
+                "D=M\n"
+                "@SP\n"
+                "A=M\n"
+                "M=D\n"
+                "AM=M+1\n"
+                "@THIS\n"
+                "D=M\n"
+                "@SP\n"
+                "A=M\n"
+                "M=D\n"
+                "AM=M+1\n"
+                "@THAT\n"
+                "D=M\n"
+                "@SP\n"
+                "A=M\n"
+                "M=D\n"
+                "AM=M+1\n"
+                "@{nArgs}\n"
+                "D=A\n"
+                "@5\n"
+                "D=D-A\n"
+                "@SP\n"
+                "D=M-D\n"
+                "@ARG\n"
+                "M=D\n"
+                "@SP\n"
+                "D=M\n"
+                "@LCL\n"
+                "M=D\n"
+                "@{fName}\n"
+                "0; JMP\n"
+                "(RETURN_{fname})\n"
+                )
+            strFields = {'fName': fName, 'nArgs': nArgs}
+            self.write(code, strFields=strFields)
+    
+    def writeFunction(self, cmd, fName, nLocals):
+        if cmd == C_FUNCTION:
+            code = (
+                "({fName})\n"
+                "@{nLocals}\n"
+                "D=A\n"
+                "@R13\n"
+                "M=D\n"
+                "(LOOP_LOCAL)\n"
+                "@0\n"
+                "D=A\n"
+                "@LCL\n"
+                "A=M\n"
+                "M=D\n"
+                "@R13\n"
+                "MD=M-1\n"
+                "@LOOP_LOCAL\n"
+                "D; JGT\n"
+                )
+            strFields = {'fName': fName, 'nLocals': nLocals}
+            self.write(code, strFields=strFields)
+    
+    def writeReturn(self, cmd):
+        if cmd == C_RETURN:
+            code = (
+                "@1\n@1\n@1\n@1\n"
+                "@LCL\n"
+                "D=M\n"
+                "@FRAME\n"
+                "M=D\n"
+
+                "@5\n"
+                "D=A\n"
+                "@FRAME\n"
+                "A=M-D\n"
+                "D=M\n"
+                "@RET\n"
+                "M=D\n"
+
+                "@SP\n"
+                "AM=M-1\n"
+                "D=M\n"
+                "@ARG\n"
+                "A=M\n"
+                "M=D\n"
+                "@SP\n"
+
+                "@ARG\n"
+                "D=M+1\n"
+                "@SP\n"
+                "M=D\n"
+
+                "@1\n"
+                "D=A\n"
+                "@FRAME\n"
+                "A=M-D\n"
+                "D=M\n"
+                "@THAT\n"
+                "M=D\n"
+
+                "@2\n"
+                "D=A\n"
+                "@FRAME\n"
+                "A=M-D\n"
+                "D=M\n"
+                "@THIS\n"
+                "M=D\n"
+
+                "@3\n"
+                "D=A\n"
+                "@FRAME\n"
+                "A=M-D\n"
+                "D=M\n"
+                "@ARG\n"
+                "M=D\n"
+
+                "@4\n"
+                "D=A\n"
+                "@FRAME\n"
+                "A=M-D\n"
+                "D=M\n"
+                "@LCL\n"
+                "M=D\n"
+
+                "@RET\n"
+                "A=D\n"
+                "0;JMP\n"
+                )
+            self.write(code)
+
 
     def writeArithmetic(self, cmd, opType):
         """

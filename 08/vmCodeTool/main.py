@@ -39,6 +39,12 @@ if __name__ == "__main__":
         asmWriter.writeGoto(cmd, segment)
         # write IF
         asmWriter.writeIf(cmd, segment)
+        # Write calls to functions
+        asmWriter.writeCall(cmd, segment, index)
+        # Write functions
+        asmWriter.writeFunction(cmd, segment, index)
+        # write Return
+        asmWriter.writeReturn(cmd)
         # Write arithmetic (if command is arithmetic)
         asmWriter.writeArithmetic(cmd, segment)
         # Write stack command

@@ -2,6 +2,7 @@
 D=A
 @SP
 AM=D
+@Sys.init
 // push constant 0
 @0
 D=A

@@ -34,9 +34,7 @@ class ParseVM(object):
     def arg1(self, cmd):
         if not self.commandType(cmd) == C_RETURN:
             temp = cmd.split()
-            if len(temp) == 3:
-                return temp[1]
-            elif len(temp) == 2:
+            if len(temp) in [2, 3]:
                 return temp[1]
             return temp[0]
 
