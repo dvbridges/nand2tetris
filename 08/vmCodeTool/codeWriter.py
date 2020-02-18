@@ -9,12 +9,17 @@ from pathlib import Path
 class CodeWriter(object):
     def __init__(self, filename):
         self.filename = None
-        self.setFilename(filename)
-        self.openFile = open(self.filename, 'w')
+        self.openFile = open(filename, 'w')
         self.lineNo = 0
         self.staticVar = str(Path(filename).name).split('.')[0]
         self.staticN = 0
+        self.nCall = 0
+        self.conditionalCount = 0
     
+    def setFilename(self, filename):
+        self.filename = filename.replace('.vm', '.asm')
+        self.staticVar = Path(filename).name
+
     def write(self, code, strFields=None):
         
         temp = [line for line in (line.strip() for line in code.split('\n')) if len(line)]
@@ -33,12 +38,8 @@ class CodeWriter(object):
             "D=A\n"
             "@SP\n"
             "AM=D\n"
-            "@Sys.init\n"
             )
         self.write(code)
-
-    def setFilename(self, filename):
-        self.filename = filename.replace('.vm', '.asm')
 
     def writeLabel(self, cmd, label):
         if cmd == C_LABEL:
@@ -59,49 +60,55 @@ class CodeWriter(object):
                 "AM=M-1\n"
                 "D=M\n"
                 "@{label}\n"
-                "D; JNE\n"
+                "D;JNE\n"
             )
             self.write(code, strFields={'label': label})
         
     def writeCall(self, cmd, fName, nArgs):
         if cmd == C_CALL:
             code = (
-                "@RETURN_{fName}\n"
+                "@RETURN${fName}${nCall}\n"
                 "D=A\n"
                 "@SP\n"
                 "A=M\n"
                 "M=D\n"
-                "AM=M+1\n"
+                "@SP\n"
+                "M=M+1\n"
                 "@LCL\n"
                 "D=M\n"
                 "@SP\n"
                 "A=M\n"
                 "M=D\n"
-                "AM=M+1\n"
+                "@SP\n"
+                "M=M+1\n"
                 "@ARG\n"
                 "D=M\n"
                 "@SP\n"
                 "A=M\n"
                 "M=D\n"
-                "AM=M+1\n"
+                "@SP\n"
+                "M=M+1\n"
                 "@THIS\n"
                 "D=M\n"
                 "@SP\n"
                 "A=M\n"
                 "M=D\n"
-                "AM=M+1\n"
+                "@SP\n"
+                "M=M+1\n"
                 "@THAT\n"
                 "D=M\n"
                 "@SP\n"
                 "A=M\n"
                 "M=D\n"
-                "AM=M+1\n"
+                "@SP\n"
+                "M=M+1\n"
+
+                "@SP\n"
+                "D=M\n"
                 "@{nArgs}\n"
-                "D=A\n"
+                "D=D-A\n"
                 "@5\n"
                 "D=D-A\n"
-                "@SP\n"
-                "D=M-D\n"
                 "@ARG\n"
                 "M=D\n"
                 "@SP\n"
@@ -110,58 +117,40 @@ class CodeWriter(object):
                 "M=D\n"
                 "@{fName}\n"
                 "0; JMP\n"
-                "(RETURN_{fname})\n"
+                "(RETURN${fName}${nCall})\n"
                 )
-            strFields = {'fName': fName, 'nArgs': nArgs}
+            strFields = {'fName': fName, 'nArgs': nArgs, 'nCall': self.nCall}
             self.write(code, strFields=strFields)
+            self.nCall += 1
     
     def writeFunction(self, cmd, fName, nLocals):
         if cmd == C_FUNCTION:
-            code = (
-                "({fName})\n"
-                "@{nLocals}\n"
-                "D=A\n"
-                "@R13\n"
-                "M=D\n"
-                "(LOOP_LOCAL)\n"
-                "@0\n"
-                "D=A\n"
-                "@LCL\n"
-                "A=M\n"
-                "M=D\n"
-                "@R13\n"
-                "MD=M-1\n"
-                "@LOOP_LOCAL\n"
-                "D; JGT\n"
-                )
-            strFields = {'fName': fName, 'nLocals': nLocals}
-            self.write(code, strFields=strFields)
+            code = "({fName})\n"
+            self.write(code, strFields={'fName': fName})
+            for n in range(int(nLocals)):
+                self.writePushPop(C_PUSH, 'constant', 0)
     
     def writeReturn(self, cmd):
         if cmd == C_RETURN:
             code = (
-                "@1\n@1\n@1\n@1\n"
                 "@LCL\n"
                 "D=M\n"
-                "@FRAME\n"
+                "@SAVEFRAME\n"
                 "M=D\n"
 
                 "@5\n"
                 "D=A\n"
-                "@FRAME\n"
-                "A=M-D\n"
+                "@SAVEFRAME\n"
+                "D=M-D\n"
+                "A=D\n"
                 "D=M\n"
-                "@RET\n"
+                "@RET_ADDR\n" 
                 "M=D\n"
+            )
+            self.write(code)
+            self.writePushPop(C_POP, 'argument', 0)
 
-                "@SP\n"
-                "AM=M-1\n"
-                "D=M\n"
-                "@ARG\n"
-                "A=M\n"
-                "M=D\n"
-                "@SP\n"
-
+            code = (
                 "@ARG\n"
                 "D=M+1\n"
                 "@SP\n"
@@ -169,7 +158,7 @@ class CodeWriter(object):
 
                 "@1\n"
                 "D=A\n"
-                "@FRAME\n"
+                "@SAVEFRAME\n"
                 "A=M-D\n"
                 "D=M\n"
                 "@THAT\n"
@@ -177,7 +166,7 @@ class CodeWriter(object):
 
                 "@2\n"
                 "D=A\n"
-                "@FRAME\n"
+                "@SAVEFRAME\n"
                 "A=M-D\n"
                 "D=M\n"
                 "@THIS\n"
@@ -185,7 +174,7 @@ class CodeWriter(object):
 
                 "@3\n"
                 "D=A\n"
-                "@FRAME\n"
+                "@SAVEFRAME\n"
                 "A=M-D\n"
                 "D=M\n"
                 "@ARG\n"
@@ -193,16 +182,18 @@ class CodeWriter(object):
 
                 "@4\n"
                 "D=A\n"
-                "@FRAME\n"
+                "A=M\n"
+                "@SAVEFRAME\n"
                 "A=M-D\n"
                 "D=M\n"
                 "@LCL\n"
                 "M=D\n"
 
-                "@RET\n"
-                "A=D\n"
+                "@RET_ADDR\n"
+                "A=M\n"
                 "0;JMP\n"
                 )
+            
             self.write(code)
 
 
@@ -267,68 +258,69 @@ class CodeWriter(object):
             if opType == 'eq':
                 code = (
                     "@SP\n"
-                    "AM=M-1\n"     # Get first value
-                    "D=M\n"        # Store it in D
-                    "A=A-1\n"      # Go to next value
-                    "D=M-D\n"      # Calculate diff, store in M and D
-                    "@{trueN}\n"   # Get next line address
-                    "D=D;JEQ\n"
+                    "AM=M-1\n"     
+                    "D=M\n"        
+                    "A=A-1\n"      
+                    "D=M-D\n"      
+                    "@EQ_TRUE_{nConditional}\n"
+                    "D;JEQ\n"
                     "@SP\n"
                     "A=M-1\n"
                     "M=0\n"
-                    "@{falseN}\n"
+                    "@EQ_FALSE_{nConditional}\n"
                     "0;JMP\n"
-                    "@{trueN}\n"   # Get next line address
+                    "(EQ_TRUE_{nConditional})\n"
                     "@SP\n"
                     "A=M-1\n"
                     "M=-1\n"
-                    "@{falseN}\n"
+                    "(EQ_FALSE_{nConditional})\n"
                 ) 
             if opType == 'gt':
                 code = (
                     "@SP\n"
-                    "AM=M-1\n"     # Get first value
-                    "D=M\n"        # Store it in D
-                    "A=A-1\n"      # Go to next value
-                    "D=M-D\n"      # Calculate diff, store in M and D
-                    "@{trueN}\n"   # Get next line address
-                    "D=D;JGT\n"
+                    "AM=M-1\n"     
+                    "D=M\n"        
+                    "A=A-1\n"      
+                    "D=M-D\n"      
+                    "@GT_TRUE_{nConditional}\n"
+                    "D;JGT\n"
                     "@SP\n"
                     "A=M-1\n"
                     "M=0\n"
-                    "@{falseN}\n"
+                    "@GT_FALSE_{nConditional}\n"
                     "0;JMP\n"
-                    "@{trueN}\n"   # Get next line address
+                    "(GT_TRUE_{nConditional})\n"
                     "@SP\n"
                     "A=M-1\n"
                     "M=-1\n"
-                    "@{falseN}\n"
+                    "(GT_FALSE_{nConditional})\n"
                 )
-
             if opType == 'lt':
                 code = (
                     "@SP\n"
-                    "AM=M-1\n"     # Get first value
-                    "D=M\n"        # Store it in D
-                    "A=A-1\n"      # Go to next value
-                    "D=M-D\n"      # Calculate diff, store in M and D
-                    "@{trueN}\n"   # Get next line address
-                    "D=D;JLT\n"
+                    "AM=M-1\n"     
+                    "D=M\n"        
+                    "A=A-1\n"      
+                    "D=M-D\n"      
+                    "@LT_TRUE_{nConditional}\n"
+                    "D;JLT\n"
                     "@SP\n"
                     "A=M-1\n"
                     "M=0\n"
-                    "@{falseN}\n"
+                    "@LT_FALSE_{nConditional}\n"
                     "0;JMP\n"
-                    "@{trueN}\n"   # Get next line address
+                    "(LT_TRUE_{nConditional})\n"
                     "@SP\n"
                     "A=M-1\n"
                     "M=-1\n"
-                    "@{falseN}\n"
+                    "(LT_FALSE_{nConditional})\n"
                 )
             self.write(code, strFields={
-                'trueN': self.lineNo + 7,
-                'falseN': self.lineNo + 6
+                'nConditional': self.conditionalCount
             })
+
+            if opType in ['eq', 'lt', 'gt']:
+                self.conditionalCount += 1
 
     def writePushPop(self, cmd, segment, index):
         """
@@ -361,7 +353,16 @@ class CodeWriter(object):
                 name = False
                 if cmd == C_PUSH:
                     code = (
+                        "@R13\n"
+                        "M=D\n"
                         "@{staticName}.{index}\n"
+                        "D=A\n"
+                        "@R14\n"
+                        "M=D\n"
+                        "@R13\n"
+                        "D=M\n"
+                        "@R14\n"
+                        "A=M\n"
                         "D=M\n"
                         "@SP\n"
                         "A=M\n"
@@ -374,7 +375,16 @@ class CodeWriter(object):
                         "@SP\n"
                         "AM=M-1\n"
                         "D=M\n"
+                        "@R13\n"
+                        "M=D\n"
                         "@{staticName}.{index}\n"
+                        "D=A\n"
+                        "@R14\n"
+                        "M=D\n"
+                        "@R13\n"
+                        "D=M\n"
+                        "@R14\n"
+                        "A=M\n"
                         "M=D\n"
                         )
                 self.staticN +=1  # Increment static var counter
