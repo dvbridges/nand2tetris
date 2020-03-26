@@ -48,6 +48,7 @@ class JackTokenizer (object):
         # These can be handled by checking for the closing comment symbols
         temp = ''
         runCode = True
+        inString = False
 
         while runCode and self.hasMoreTokens:
             if self.codeStream[self.index] in [' ', '\t', '\n'] and len(temp) == 0:
@@ -64,13 +65,19 @@ class JackTokenizer (object):
             else:
                 # Check for symbol only
                 char = self.codeStream[self.index]
+
+                if char == '"' and not inString:
+                    inString = True
+                elif char == '"' and inString:
+                    inString = False
+
                 if char in SYMBOLS and len(temp) == 0:
                     temp = char
                     self.index += 1
                     runCode = False
                     break
                 # Check for trailing symbol or space, after keywords, identifiers etc
-                elif char in SYMBOLS or char in [' ', '\t', '\n'] and len(temp) > 0:
+                elif char in SYMBOLS or char in [' ', '\t', '\n'] and len(temp) > 0 and not inString:
                     runCode = False
                     break
                 temp = temp + char
