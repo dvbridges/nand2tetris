@@ -1,44 +1,26 @@
 import sys
+import os
+from pathlib import Path
 
 from jackTokenizer import *
 
 
 class CompilationEngine(object):
     def __init__(self, fileName):
+        self.outputFilePath = None
+        self.setOutputPaths(fileName)
+        self.openFile(self.outputFilePath)
+
         self.tokenizer = JackTokenizer(fileName)
         self.indent = 0
-        self.outputFile = None
-        self.openFile('testDoc.xml')
         self.tokenizer.advance()
         self.compileClass()
-        
-    
-    def writeTestXML(self):
-        with open("testDoc.xml", 'w') as f:
-            f.write("<tokens>\n")
-            while self.tokenizer.hasMoreTokens:
-                tag = ''
-                token = ''
-                if self.tokenizer.tokenType == KEYWORD:
-                    tag = 'keyword'
-                    token = self.tokenizer.keyWord
-                elif self.tokenizer.tokenType == SYMBOL:
-                    tag = 'symbol'
-                    token = self.tokenizer.symbol
-                elif self.tokenizer.tokenType == IDENTIFIER:
-                    tag = 'identifier'
-                    token = self.tokenizer.identifier
-                elif self.tokenizer.tokenType == INT_CONST:
-                    tag = 'integerConstant'
-                    token = self.tokenizer.intVal
-                elif self.tokenizer.tokenType == STRING_CONST:
-                    tag = 'stringConstant'
-                    token = self.tokenizer.stringVal
 
-                if len(token):
-                    f.write("<{tag}> {token} </{tag}>\n".format(tag=tag, token=token))
-                self.tokenizer.advance()
-            f.write("</tokens>\n")
+    def setOutputPaths(self, fileName):
+        f = Path(fileName)
+        if not Path.exists(f.parent / "_compiled"):
+            Path.mkdir(f.parent / "_compiled") 
+        self.outputFilePath = str(f.parent / "_compiled" / f.stem) + '.xml'
 
     def openFile(self, fileName):
         self.outputFile = open(fileName, 'w+')
@@ -106,11 +88,22 @@ class CompilationEngine(object):
             self.write('keyword', self.tokenizer.keyWord)
         else:
             self.write('identifier', self.tokenizer.identifier)
-
         self.tokenizer.advance()
 
         self.write('identifier', self.tokenizer.identifier)
         self.tokenizer.advance()
+
+        extraVars = True
+        while extraVars:
+            if self.tokenizer.currentToken == ',':
+
+                self.write('symbol', self.tokenizer.symbol)
+                self.tokenizer.advance()
+
+                self.write('identifier', self.tokenizer.identifier)
+                self.tokenizer.advance()
+            else:
+                extraVars = False
 
         self.write('symbol', self.tokenizer.symbol)
         self.tokenizer.advance()
@@ -488,9 +481,10 @@ class CompilationEngine(object):
             self.write('identifier', self.tokenizer.identifier)
             self.tokenizer.advance()            
 
-            self.write('symbol', self.tokenizer.symbol)
-            self.tokenizer.advance()
-        
+            if self.tokenizer.currentToken == ',':
+                self.write('symbol', self.tokenizer.symbol)
+                self.tokenizer.advance()
+
         self.write('parameterList', startTag=False)
 
     def compileExpressionList(self):
