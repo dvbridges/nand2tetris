@@ -1,10 +1,12 @@
 import sys
-
+import copy
 
 SYMBOLS = ['{', '}', '(', ')', '[', ']', '.', ',', ';', '+', '-', '*', '/', '&', '|', '<', '>', '=', '~'] 
 KEYWORDS = ['class', 'constructor', 'function', 'method', 'field', 
     'static', 'var', 'int', 'char', 'boolean', 'void', 'true', 
     'false', 'null', 'this', 'let', 'do', 'if', 'else', 'while', 'return']
+OPERATORS = ['+', '-', '*', '/', '&', '|', '<', '>', '=', '~'] 
+UN_OP = ['~', '-']
 
 CONVERT_SYMBOL = {}
 CONVERT_SYMBOL['<'] = '&lt;'
@@ -42,6 +44,19 @@ class JackTokenizer (object):
     @property
     def hasMoreTokens(self):
         return self.index < (len(self.codeStream)-1) 
+
+    def lookAhead(self):
+        """
+        Look ahead n spaces
+        """
+        nextToken = self.codeStream[self.index]
+        currentIndex = copy.copy(self.index)
+        
+        while nextToken in [' ', '', '/t', '/n']:
+            currentIndex += 1
+            nextToken = self.codeStream[currentIndex]
+        return nextToken
+
 
     def advance(self):
         # Only inline and API comments need to be handled
