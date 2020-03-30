@@ -33,8 +33,10 @@ class CompilationEngine(object):
         self.classTable = SymbolTable()
         self.subroutineTable = SymbolTable()
         self.vmWriter = vmWriter(fileName)
+        self.className = None
 
         self.indent = 0
+        self.labelIndex = -1
         self.tokenizer.advance()
     
     def start(self):
@@ -77,7 +79,15 @@ class CompilationEngine(object):
                 token=token,
                 extraInfo=extraInfo)
                 )
-        
+    @property 
+    def newLabel(self):
+        self.labelIndex += 1
+        return "L{}".format(self.labelIndex)
+    
+    @property
+    def currentLabel(self):
+        return "L{}".format(self.labelIndex)
+
     def compileClass(self):
         if not self.tokenizer.keyWord == 'class':
             return
@@ -88,7 +98,7 @@ class CompilationEngine(object):
         self.tokenizer.advance()
 
         self.write(tag='identifier',token=self.tokenizer.identifier)
-        className = self.tokenizer.identifier
+        self.className = self.tokenizer.identifier
         self.tokenizer.advance()
 
         self.write(tag='symbol', token=self.tokenizer.symbol)
@@ -101,7 +111,7 @@ class CompilationEngine(object):
             self.subroutineTable.startSubroutine()  # reset symbol table
             if self.tokenizer.keyWord == 'method':
                 # First argument in a subroutine table must be reference to the object containing the method
-                self.subroutineTable.define('this', className, 'argument')
+                self.subroutineTable.define('this', self.className, 'argument')
                 
             self.compileSubroutine()
         self.write(tag='symbol', token=self.tokenizer.symbol)
@@ -174,15 +184,21 @@ class CompilationEngine(object):
         self.write(tag='subroutineDec')
 
         self.write('keyword', self.tokenizer.keyWord)
+        isMethod = self.tokenizer.keyWord == 'method'
+        isConstructor = self.tokenizer.keyWord == 'constructor'
+
         self.tokenizer.advance()
 
         if self.tokenizer.tokenType == KEYWORD:
             self.write('keyword', self.tokenizer.keyWord)
         else:
             self.write('identifier', self.tokenizer.identifier)
+
         self.tokenizer.advance()
 
+        # Function name
         self.write('identifier', self.tokenizer.identifier)
+        functionName = self.tokenizer.identifier
         self.tokenizer.advance()
 
         # Open param brackets
@@ -203,25 +219,42 @@ class CompilationEngine(object):
         self.tokenizer.advance()
 
         # Write variable declarations
-        self.compileVarDec()
-        
+        nLocals = self.compileVarDec()
+        functionName = "{}.{}".format(self.className, functionName)
+        # write function entry
+        if not isConstructor:
+            self.vmWriter.writeFunction(functionName, nLocals)
+        else:
+            nLocals = self.classTable.symbolTable['kind'].count('field')
+            self.vmWriter.writeFunction(functionName, nLocals)
+
         # write statements
+        if isMethod:
+            self.vmWriter.writePush("argument 0")
+            self.vmWriter.writePop("pointer 0")
+        elif isConstructor:
+            self.vmWriter.writePush("constant {}".format(nLocals))
+            self.vmWriter.writeCall("Memory.alloc 1")
+            self.vmWriter.writePop("pointer 0")
         self.compileStatements()
 
         # close subroutine body
         self.write('symbol', token=self.tokenizer.symbol)
         self.tokenizer.advance()
         self.write(tag='subroutineBody', startTag=False)
-
+        
         # Closing tag
         self.write(tag='subroutineDec', startTag=False)
 
     def compileVarDec(self):
         
+        nLocals = 0  # For counting the number of local vars
+
         if self.tokenizer.currentToken != 'var':
-            return
+            return nLocals
 
         variableDecs = True
+
         while variableDecs:
             # Write var declarations
             if self.tokenizer.currentToken != 'var':
@@ -230,6 +263,8 @@ class CompilationEngine(object):
 
             # Write starting vardec tag 
             self.write('varDec')
+
+            nLocals += 1
 
             self.write('keyword', self.tokenizer.keyWord)
             kind = self.tokenizer.keyWord
@@ -263,6 +298,8 @@ class CompilationEngine(object):
                     self.write('symbol', self.tokenizer.symbol)
                     self.tokenizer.advance()
 
+                    nLocals += 1
+
                     # Define class table entry
                     name = self.tokenizer.identifier
                     self.subroutineTable.define(name, types, kind)
@@ -283,6 +320,7 @@ class CompilationEngine(object):
 
             # Write ending vardec tag 
             self.write('varDec', startTag=False)
+            return nLocals
 
     def compileStatements(self):
         writeStatements = self.tokenizer.currentToken in ['if', 'else', 'let', 'do', 'while', 'return']
@@ -291,12 +329,10 @@ class CompilationEngine(object):
 
         # Write starting statements tag 
         self.write('statements')
-
         while writeStatements:
             writeStatements = self.tokenizer.currentToken in ['if', 'else', 'let', 'do', 'while', 'return']
             if not writeStatements:
                 break
-
             if self.tokenizer.currentToken in ['if', 'else']:
                 self.compileIf()
             elif self.tokenizer.currentToken in ['let']:
@@ -317,8 +353,10 @@ class CompilationEngine(object):
 
         self.write('keyword', self.tokenizer.keyWord)
         self.tokenizer.advance()
-
+        funName = ''
+        methodCall = ''
         doStatement = True
+
         while doStatement:
             subroutineName = ''
             if self.tokenizer.lookAhead() == '(':
@@ -332,15 +370,26 @@ class CompilationEngine(object):
                 self.write('symbol', self.tokenizer.symbol)
                 self.tokenizer.advance()
             elif self.tokenizer.lookAhead() == '.':
-                # subroutine call 2
-                self.write('identifier', self.tokenizer.identifier)
-                subroutineName += self.tokenizer.identifier
+                obj = self.tokenizer.identifier
+
+                try:
+                    # If obj is a type of object in the subroutine table, its a local object or parameter
+                    if self.subroutineTable.typeOf(obj):
+                        methodCall += self.subroutineTable.typeOf(obj) 
+                        objKind = self.subroutineTable.kindOf(obj)
+                        n = self.subroutineTable.indexOf('this')
+                        self.vmWriter.writePush("{} {}".format(objKind, n))
+                except:  # otherwise, its a builtin, so just use the given token
+                    methodCall += obj
+
                 self.tokenizer.advance()
                 self.write('symbol', self.tokenizer.symbol)
-                subroutineName += self.tokenizer.symbol
+                methodCall += self.tokenizer.symbol
                 self.tokenizer.advance()
                 self.write('identifier', self.tokenizer.identifier)
-                subroutineName += self.tokenizer.identifier
+                methodCall += self.tokenizer.identifier
+                funName = self.tokenizer.identifier
+    
                 self.tokenizer.advance()
                 self.write('symbol', self.tokenizer.symbol)
                 self.tokenizer.advance()
@@ -348,12 +397,20 @@ class CompilationEngine(object):
                 self.write('symbol', self.tokenizer.symbol)
                 self.tokenizer.advance()
 
-            self.vmWriter.writeCall(subroutineName, nExpressions)
+            # Write constructor call
+            if len(methodCall) > 0:
+                self.vmWriter.writeCall(methodCall, nExpressions + 1)  # +1 because object first pushed onto stack
+            else:
+                self.vmWriter.writePush("pointer 0")  # method with no class - send this as first arg
+                self.vmWriter.writeCall(subroutineName, nExpressions + 1)
+
+            if len(funName) and "void {}".format(funName) in self.tokenizer.codeStream:
+                self.vmWriter.writePop("temp 0")
 
             if self.tokenizer.currentToken == ';':
                 doStatement = False
                 break
-        
+                
         self.write('symbol', self.tokenizer.symbol)
         self.tokenizer.advance()
 
@@ -364,11 +421,12 @@ class CompilationEngine(object):
         # write starting tag
         self.write('letStatement')
 
+        # Let keyword
         self.write('keyword', self.tokenizer.keyWord)
         self.tokenizer.advance()
 
+        # var name
         self.write('identifier', self.tokenizer.identifier)
-
         
         # Define class table entry
         name = self.tokenizer.identifier
@@ -396,13 +454,13 @@ class CompilationEngine(object):
             self.write('symbol', self.tokenizer.symbol)
             self.tokenizer.advance()
 
-        # Equals - anything after this is right side of statement
+        # Equal symbol
         self.write('symbol', self.tokenizer.symbol)
         self.tokenizer.advance()
 
         self.compileExpression()
 
-        # End semi-colon
+        # Semi-colon
         self.write('symbol', self.tokenizer.symbol)
         self.tokenizer.advance()
 
@@ -416,24 +474,45 @@ class CompilationEngine(object):
         # Compile opening tag
         self.write('whileStatement')
 
+        L1 = self.newLabel
+        L2 = self.newLabel
+
+        # while
         self.write('keyword', self.tokenizer.keyWord)
+        
+        # while label - L1
+        self.vmWriter.writeLabel(L1)
         self.tokenizer.advance()
 
+        # open brackets
         self.write('symbol', self.tokenizer.symbol)
         self.tokenizer.advance()
 
         self.compileExpression()
 
+        # close brackets
         self.write('symbol', self.tokenizer.symbol)
         self.tokenizer.advance()
 
+        # if-goto L2 label
+        self.vmWriter.writeArithmetic("not")
+        self.vmWriter.writeIf(L2)
+
+        # open curly brackets
         self.write('symbol', self.tokenizer.symbol)
         self.tokenizer.advance()
 
         self.compileStatements()
 
+        # goto L1 label
+        self.vmWriter.writeGoto(L1)
+
+        # close curly brackets
         self.write('symbol', self.tokenizer.symbol)
         self.tokenizer.advance()
+
+        # L2 label
+        self.vmWriter.writeLabel(L2)
 
         # Compile closing tag
         self.write('whileStatement', startTag=False)
@@ -445,8 +524,14 @@ class CompilationEngine(object):
         self.write('keyword', self.tokenizer.keyWord)
         self.tokenizer.advance()
 
-        if self.tokenizer.currentToken != ';':
+        if self.tokenizer.keyWord == 'this':  # returning from a constructor
+            self.vmWriter.writePush('pointer 0')
+            self.tokenizer.advance()
+        elif self.tokenizer.currentToken != ';':
             self.compileExpression()
+        else:
+            self.vmWriter.writePush('constant 0')
+        self.vmWriter.writeReturn()
 
         self.write('symbol', self.tokenizer.symbol)
         self.tokenizer.advance()
@@ -458,34 +543,61 @@ class CompilationEngine(object):
         # Compile opening tag
         self.write('ifStatement')
 
+        L1 = self.newLabel
+        L2 = self.newLabel
+
+        # if 
         self.write('keyword', self.tokenizer.keyWord)
         self.tokenizer.advance()
 
+        # open brackets
         self.write('symbol', self.tokenizer.symbol)
         self.tokenizer.advance()
 
+        # expresssion
         self.compileExpression()
 
+        # if-goto L1
+        self.vmWriter.writeArithmetic("not")
+        self.vmWriter.writeIf(L1)
+
+        # close brackets
         self.write('symbol', self.tokenizer.symbol)
         self.tokenizer.advance()
 
+        # open curly brackets
         self.write('symbol', self.tokenizer.symbol)
         self.tokenizer.advance()
 
+        # write if statement body
         self.compileStatements()
 
+        # write Goto L2
+        self.vmWriter.writeGoto(L2)
+
+        # close curly brackets
         self.write('symbol', self.tokenizer.symbol)
         self.tokenizer.advance()
 
         if self.tokenizer.currentToken == 'else':
+            # else
             self.write('keyword', self.tokenizer.keyWord)
             self.tokenizer.advance()
 
+            # open curly brackets
             self.write('symbol', self.tokenizer.symbol)
             self.tokenizer.advance()
 
+            # write L1 label
+            self.vmWriter.writeLabel(L1)
+
+            # Write else body
             self.compileStatements()
 
+            # write L2 label
+            self.vmWriter.writeLabel(L2)
+
+            # close curly brackets
             self.write('symbol', self.tokenizer.symbol)
             self.tokenizer.advance()
         
@@ -524,9 +636,13 @@ class CompilationEngine(object):
         # compile starting tag
         self.write('term')
         opCollection = []  # For dealing with unary operators
+        methodCall = ''
+        isConstructor = False
+        nExpressions = 0
 
         if self.tokenizer.tokenType == KEYWORD:
             self.write('keyword', self.tokenizer.keyWord)
+            self.vmWriter.writePush("{}".format(self.tokenizer.keyWord))
             self.tokenizer.advance()
         elif self.tokenizer.tokenType == INT_CONST:
             self.write('integerConstant', self.tokenizer.intVal)
@@ -559,7 +675,7 @@ class CompilationEngine(object):
                 self.write('symbol', self.tokenizer.symbol)
                 self.tokenizer.advance()
             elif self.tokenizer.lookAhead() == '(':
-                # subroutine call 1
+                # subroutine call 1 - probably redundant because functions like this called using do
                 self.write('identifier', self.tokenizer.identifier)
                 self.tokenizer.advance()
                 self.write('symbol', self.tokenizer.symbol)
@@ -568,16 +684,36 @@ class CompilationEngine(object):
                 self.write('symbol', self.tokenizer.symbol)
                 self.tokenizer.advance()
             elif self.tokenizer.lookAhead() == '.':
-                # subroutine call 2
+                # subroutine call 2 - method call
                 self.write('identifier', self.tokenizer.identifier)
+                obj = self.tokenizer.identifier
+
+                # If obj is the className, its a constructor call
+                if obj == self.className:  
+                    methodCall += self.subroutineTable.typeOf('this')
+                    isConstructor = (obj == self.className)
+                else:
+                    try:
+                        # If obj is a type of object in the subroutine table, its a local object or parameter
+                        if self.subroutineTable.typeOf(obj):
+                            methodCall += self.subroutineTable.typeOf(obj) 
+                            objKind = self.subroutineTable.kindOf(obj)
+                            n = self.subroutineTable.indexOf('this')
+                            self.vmWriter.writePush("{} {}".format(objKind, n))
+                    except:  # otherwise, its a builtin, so just use the given token
+                        methodCall += obj
+
+                self.tokenizer.advance()
+                self.write('symbol', self.tokenizer.symbol)
+                methodCall += self.tokenizer.symbol
+                self.tokenizer.advance()
+                self.write('identifier', self.tokenizer.identifier)
+                methodCall += self.tokenizer.identifier
+    
                 self.tokenizer.advance()
                 self.write('symbol', self.tokenizer.symbol)
                 self.tokenizer.advance()
-                self.write('identifier', self.tokenizer.identifier)
-                self.tokenizer.advance()
-                self.write('symbol', self.tokenizer.symbol)
-                self.tokenizer.advance()
-                self.compileExpressionList()
+                nExpressions = self.compileExpressionList()
                 self.write('symbol', self.tokenizer.symbol)
                 self.tokenizer.advance()
             else:
@@ -599,6 +735,10 @@ class CompilationEngine(object):
                 
                 self.vmWriter.writePush("{kind} {index}".format(kind=kind, index=index))
                 self.tokenizer.advance()
+
+        # Write constructor call
+        if len(methodCall) > 0:
+            self.vmWriter.writeCall(methodCall, nExpressions + 1 - isConstructor)  # +1 because object first pushed onto stack
 
         # Write unary ops
         opCollection.reverse()

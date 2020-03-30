@@ -32,20 +32,23 @@ class VMWriter(object):
         self.outputFile.write(command + '\n') 
     
     def writeLabel(self, label):
-        pass
+        self.outputFile.write("{}\n".format(label))
     
     def writeGoto(self, label):
-        pass
+        self.outputFile.write("goto {}\n".format(label))
     
     def writeIf(self, label):
-        pass
+        self.outputFile.write("if-goto {}\n".format(label))
     
-    def writeCall(self, name, args):
+    def writeCall(self, name, args=None):
+        if args in [None, 0] :
+            args = ''
         self.outputFile.write("call {} {}\n".format(name, args))
     
     def writeFunction(self, name, nLocals):
-        pass
+        self.outputFile.write("// function {}\n".format(name, nLocals))
+        self.outputFile.write("function {} {}\n".format(name, nLocals))
     
     def writeReturn(self):
-        pass
+        self.outputFile.write("return\n")
     
