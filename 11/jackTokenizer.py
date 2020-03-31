@@ -81,12 +81,16 @@ class JackTokenizer (object):
                 # Check for symbol only
                 char = self.codeStream[self.index]
 
-                if char == '"' and not inString:
-                    inString = True
-                elif char == '"' and inString:
+                if char == '"' and inString:
                     inString = False
+                elif char == '"' and not inString:
+                    inString = True
 
-                if char in SYMBOLS and len(temp) == 0:
+                if inString:
+                    temp += char
+                    self.index += 1
+                    continue
+                elif char in SYMBOLS and len(temp) == 0:
                     temp = char
                     self.index += 1
                     runCode = False
@@ -138,11 +142,10 @@ class JackTokenizer (object):
     @property
     def stringVal(self):
         if self.tokenType == STRING_CONST:
-            return self.currentToken.replace('"', '')
+            return self.currentToken.replace(';', '\;')
 
 if __name__ == "__main__":
     arg = sys.argv[1]
     tokenizer = JackTokenizer(arg)
     while(tokenizer.hasMoreTokens):
         tokenizer.advance()
-        print(tokenizer.currentToken)

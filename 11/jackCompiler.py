@@ -17,16 +17,14 @@ if __name__ == "__main__":
     if files.is_dir():
         filePath = list(Path(files.name).glob('**/*.jack'))
         for eachFile in filePath:
-            compiler = CompilationEngine(eachFile, JackTokenizer, SymbolTable)
+            compiler = CompilationEngine(eachFile, JackTokenizer, SymbolTable, VMWriter)
             compiler.start()
-            compiler.closeFile()
             compiler.vmWriter.closeFile()
     else:
         compiler = CompilationEngine(files, JackTokenizer, SymbolTable, VMWriter)
         compiler.start()
         # print(compiler.subroutineTable.symbolTable)
         # print(compiler.classTable.symbolTable)
-        compiler.closeFile()
         compiler.vmWriter.closeFile()
 
 

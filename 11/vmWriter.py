@@ -8,9 +8,8 @@ class VMWriter(object):
     
     def setOutputPaths(self, fileName):
         f = Path(fileName)
-        if not Path.exists(f.parent / "_compiled"):
-            Path.mkdir(f.parent / "_compiled") 
-        self.outputFilePath = str(f.parent / "_compiled" / f.stem) + '.vm'
+        print(f)
+        self.outputFilePath = str(f.parent / f.stem) + '.vm'
 
     def openFile(self, fileName):
         self.outputFile = open(fileName, 'w+')
@@ -18,21 +17,21 @@ class VMWriter(object):
     def closeFile(self):
         self.outputFile.close()
 
-    def writePush(self, segment):
-        if segment.startswith('this '):
+    def writePush(self, first, second=0):
+        if first.startswith('this'):
             self.outputFile.write("push argument 0\n")
             self.outputFile.write("pop pointer 0\n")
 
-        self.outputFile.write("push {}\n".format(segment))
+        self.outputFile.write("push {} {}\n".format(first, second))
 
-    def writePop(self, segment):
-        self.outputFile.write("pop {}\n".format(segment))
+    def writePop(self, first, second=0):
+        self.outputFile.write("pop {} {}\n".format(first, second))
 
     def writeArithmetic(self, command):
         self.outputFile.write(command + '\n') 
     
     def writeLabel(self, label):
-        self.outputFile.write("{}\n".format(label))
+        self.outputFile.write("label {}\n".format(label))
     
     def writeGoto(self, label):
         self.outputFile.write("goto {}\n".format(label))
@@ -42,7 +41,8 @@ class VMWriter(object):
     
     def writeCall(self, name, args=None):
         if args in [None, 0] :
-            args = ''
+            args = 0 
+
         self.outputFile.write("call {} {}\n".format(name, args))
     
     def writeFunction(self, name, nLocals):
