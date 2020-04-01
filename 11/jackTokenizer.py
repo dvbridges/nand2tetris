@@ -142,7 +142,7 @@ class JackTokenizer (object):
     @property
     def stringVal(self):
         if self.tokenType == STRING_CONST:
-            return self.currentToken.replace(';', '\;')
+            return self.currentToken.replace(';', '\;').replace('"', '')
 
 if __name__ == "__main__":
     arg = sys.argv[1]

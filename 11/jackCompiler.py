@@ -23,8 +23,6 @@ if __name__ == "__main__":
     else:
         compiler = CompilationEngine(files, JackTokenizer, SymbolTable, VMWriter)
         compiler.start()
-        # print(compiler.subroutineTable.symbolTable)
-        # print(compiler.classTable.symbolTable)
         compiler.vmWriter.closeFile()
 
 

@@ -18,10 +18,6 @@ class VMWriter(object):
         self.outputFile.close()
 
     def writePush(self, first, second=0):
-        if first.startswith('this'):
-            self.outputFile.write("push argument 0\n")
-            self.outputFile.write("pop pointer 0\n")
-
         self.outputFile.write("push {} {}\n".format(first, second))
 
     def writePop(self, first, second=0):

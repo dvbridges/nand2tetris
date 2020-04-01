@@ -251,6 +251,7 @@ class CompilationEngine(object):
 
         funName = ''
         methodCall = ''
+        isConstructor = False
         useBuiltin = False
         doStatement = True
 
@@ -264,6 +265,7 @@ class CompilationEngine(object):
                 self.tokenizer.advance()
                 # open brackets
                 self.tokenizer.advance()
+                self.vmWriter.writePush("pointer", "0")
                 nExpressions = self.compileExpressionList()
                 # close brackets
                 self.tokenizer.advance()
@@ -323,7 +325,6 @@ class CompilationEngine(object):
                 self.vmWriter.writeCall(methodCall, nExpressions) 
             else:
                 # Now append className to function, as it is a class function
-                self.vmWriter.writePush("pointer", "0")
                 newSubCall = "{}.{}".format(self.className, subroutineName)
                 self.vmWriter.writeCall(newSubCall, nExpressions)
 
@@ -373,6 +374,7 @@ class CompilationEngine(object):
 
             # add expression to array address
             self.vmWriter.writeArithmetic('add')
+            # self.vmWriter.writePush("temp", "0")
 
             # close square brackets
             self.tokenizer.advance()
@@ -382,12 +384,12 @@ class CompilationEngine(object):
 
         # Compile expression
         self.compileExpression()
-
+        
         if isArray:
             # send expression to temp
             self.vmWriter.writePop("temp", "0")
             # send first array address to that
-            self.vmWriter.writePop("pointer", "0")
+            self.vmWriter.writePop("pointer", "1")
             # Push temp value of expression 2 to stack
             self.vmWriter.writePush("temp", "0")
             # Send temp value to array address
@@ -537,16 +539,14 @@ class CompilationEngine(object):
     def compileTerm(self):
         opCollection = []  # For dealing with unary operators
         methodCall = ''
-        isConstructor = False
         isMethod = False
+        useBuiltin = False
         nExpressions = 0
         
         if self.tokenizer.tokenType == KEYWORD:
-
             if self.tokenizer.keyWord == 'true':
                 self.vmWriter.writePush("constant", "1")
                 self.vmWriter.writeArithmetic("neg")
-
             elif self.tokenizer.keyWord in ['false', 'null']:
                 self.vmWriter.writePush("constant", "0")
             else:
@@ -556,7 +556,12 @@ class CompilationEngine(object):
             self.vmWriter.writePush("constant", "{}".format(self.tokenizer.intVal))
             self.tokenizer.advance()
         elif self.tokenizer.tokenType == STRING_CONST:
-            self.vmWriter.writePush("constant", self.tokenizer.stringVal)
+            self.vmWriter.writePush("constant", len(self.tokenizer.stringVal))
+            self.vmWriter.writeCall("String.new", 1)
+            for eachChar in self.tokenizer.stringVal:
+                if eachChar != '"':
+                    self.vmWriter.writePush("constant", ord(eachChar))
+                    self.vmWriter.writeCall("String.appendChar".format(eachChar), 2)
             self.tokenizer.advance()
         elif self.tokenizer.currentToken in UN_OP:
             opCollection.append(self.tokenizer.currentToken)  # append unary op
@@ -573,10 +578,21 @@ class CompilationEngine(object):
             elif self.tokenizer.lookAhead() == '[':
                 # Varname [ expression ]
                 # array name
+                arr = self.tokenizer.identifier
+                arrIndex = self.subroutineTable.indexOf(arr)
+                arrKind = self.subroutineTable.kindOf(arr)
                 self.tokenizer.advance()
+
                 # open square brackets
                 self.tokenizer.advance()
                 self.compileExpression()
+
+                # Write array expression operations
+                self.vmWriter.writePush(VM_TYPES[arrKind], arrIndex)
+                self.vmWriter.writeArithmetic('add')
+                self.vmWriter.writePop("pointer", 1)
+                self.vmWriter.writePush("that", 0)
+
                 # close square brackets
                 self.tokenizer.advance()
             elif self.tokenizer.lookAhead() == '(':
@@ -593,15 +609,31 @@ class CompilationEngine(object):
             elif self.tokenizer.lookAhead() == '.':
                 # subroutine call 2 - method call
                 obj = self.tokenizer.identifier
+
                 try:
                     # If obj is a type of object in the subroutine table, its a local object or parameter
                     if self.subroutineTable.typeOf(obj):
-                        methodCall += self.subroutineTable.typeOf(obj) 
-                        objKind=VM_TYPES[self.subroutineTable.kindOf(obj)]  # convert kind to a VM_TYPE e.g., method vars become local
-                        n = self.subroutineTable.indexOf('this')
-                        self.vmWriter.writePush(objKind, n)
-                except:  # otherwise, its a builtin or is the class, so just use the given token
-                    methodCall += obj
+                        objType = self.subroutineTable.typeOf(obj)
+                        objKind = VM_TYPES[self.subroutineTable.kindOf(obj)]  # convert kind to a VM_TYPE e.g., method vars become local
+                        try:
+                            objIndex = self.subroutineTable.indexOf('this')
+                        except:
+                            objIndex = self.subroutineTable.indexOf(obj)
+                        methodCall += objType
+                        self.vmWriter.writePush(objKind, objIndex)
+                except:  
+                    # If obj is a type of object in the subroutine table, its a local object or parameter
+                    try:
+                        if self.classTable.typeOf(obj):
+                            objType = self.classTable.typeOf(obj)
+                            objKind = VM_TYPES[self.classTable.kindOf(obj)]  # convert kind to a VM_TYPE e.g., method vars become local
+                            objIndex = self.classTable.indexOf(obj)
+                            methodCall += objType
+                            self.vmWriter.writePush(objKind, objIndex)
+                    except: 
+                        # Its a builtin, so use token
+                        methodCall += obj
+                        useBuiltin = True
 
                 self.tokenizer.advance()
                 # dot separator
@@ -629,6 +661,7 @@ class CompilationEngine(object):
                     kind=self.classTable.kindOf(name)
                     index=self.classTable.indexOf(name)
 
+
                 self.vmWriter.writePush(VM_TYPES[kind], index)
                 self.tokenizer.advance()
 
@@ -640,8 +673,8 @@ class CompilationEngine(object):
             match = re.search(regex, self.tokenizer.codeStream)
 
             # Check if call is to a constructor - this not pushed on constructors
-            if match:
-                isMethod = True
+            if match or not useBuiltin: 
+                nExpressions += 1
 
             self.vmWriter.writeCall(methodCall, nExpressions + isMethod) 
 
@@ -683,7 +716,6 @@ class CompilationEngine(object):
             if self.tokenizer.currentToken == ')':
                 expList = False
                 break
-            
             self.compileExpression()
             nExpressions += 1
 
