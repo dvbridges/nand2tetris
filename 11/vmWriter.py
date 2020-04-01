@@ -8,7 +8,7 @@ class VMWriter(object):
     
     def setOutputPaths(self, fileName):
         f = Path(fileName)
-        print(f)
+        print("Compiling {}...".format(f))
         self.outputFilePath = str(f.parent / f.stem) + '.vm'
 
     def openFile(self, fileName):

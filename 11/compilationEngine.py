@@ -8,7 +8,7 @@ from jackTokenizer import *
 OP_CONVERSION = {}
 OP_CONVERSION['+'] = 'add'
 OP_CONVERSION['-'] = 'sub'
-OP_CONVERSION['~'] = 'not'  # TODO: check if this causes error i.e, using neg instead of not
+OP_CONVERSION['~'] = 'not' 
 OP_CONVERSION['='] = 'eq'
 OP_CONVERSION['>'] = 'gt'
 OP_CONVERSION['<'] = 'lt'
@@ -16,6 +16,10 @@ OP_CONVERSION['&'] = 'and'
 OP_CONVERSION['|'] = 'or'
 OP_CONVERSION['*'] = 'call Math.multiply 2'
 OP_CONVERSION['/'] = 'call Math.divide 2'
+
+UNARY_OP_CONVERSION = {}
+UNARY_OP_CONVERSION['-'] = 'neg'
+UNARY_OP_CONVERSION['~'] = 'not' 
 
 VM_TYPES = {}
 VM_TYPES['var'] = 'local'
@@ -44,11 +48,11 @@ class CompilationEngine(object):
     @property 
     def newLabel(self):
         self.labelIndex += 1
-        return "L{}".format(self.labelIndex)
+        return "{}".format(self.labelIndex)
     
     @property
     def currentLabel(self):
-        return "L{}".format(self.labelIndex)
+        return "{}".format(self.labelIndex)
 
     def compileClass(self):
         if not self.tokenizer.keyWord == 'class':
@@ -271,13 +275,27 @@ class CompilationEngine(object):
                 try:
                     # If obj is a type of object in the subroutine table, its a local object or parameter
                     if self.subroutineTable.typeOf(obj):
-                        methodCall += self.subroutineTable.typeOf(obj) 
-                        objKind=VM_TYPES[self.subroutineTable.kindOf(obj)]  # convert kind to a VM_TYPE e.g., method vars become local
-                        n = self.subroutineTable.indexOf('this')
-                        self.vmWriter.writePush(objKind, n)
-                except:  # otherwise, its a builtin, so just use the given token
-                    methodCall += obj
-                    useBuiltin = True
+                        objType = self.subroutineTable.typeOf(obj)
+                        objKind = VM_TYPES[self.subroutineTable.kindOf(obj)]  # convert kind to a VM_TYPE e.g., method vars become local
+                        try:
+                            objIndex = self.subroutineTable.indexOf('this')
+                        except:
+                            objIndex = self.subroutineTable.indexOf(obj)
+                        methodCall += objType
+                        self.vmWriter.writePush(objKind, objIndex)
+                except:  
+                    # If obj is a type of object in the subroutine table, its a local object or parameter
+                    try:
+                        if self.classTable.typeOf(obj):
+                            objType = self.classTable.typeOf(obj)
+                            objKind = VM_TYPES[self.classTable.kindOf(obj)]  # convert kind to a VM_TYPE e.g., method vars become local
+                            objIndex = self.classTable.indexOf(obj)
+                            methodCall += objType
+                            self.vmWriter.writePush(objKind, objIndex)
+                    except: 
+                        # Its a builtin, so use token
+                        methodCall += obj
+                        useBuiltin = True
 
                 self.tokenizer.advance()
 
@@ -298,17 +316,19 @@ class CompilationEngine(object):
             # Check variable is a method
             regex = re.compile( r'method (\w+) {}'.format(funName) )
             match = re.search(regex, self.tokenizer.codeStream)
-            if match:
+            if match or not useBuiltin: 
                 nExpressions += 1
 
             if len(methodCall) > 0:
                 self.vmWriter.writeCall(methodCall, nExpressions) 
             else:
-                self.vmWriter.writeCall(subroutineName, nExpressions)
+                # Now append className to function, as it is a class function
+                self.vmWriter.writePush("pointer", "0")
+                newSubCall = "{}.{}".format(self.className, subroutineName)
+                self.vmWriter.writeCall(newSubCall, nExpressions)
 
-            # Check if method call is a void method
-            if len(funName) and "void {}".format(funName) in self.tokenizer.codeStream or useBuiltin:
-                self.vmWriter.writePop("temp", "0")
+            # Always pop temp 0 after a do call?? Try it
+            self.vmWriter.writePop("temp", "0")
 
             if self.tokenizer.currentToken == ';':
                 doStatement = False
@@ -382,8 +402,9 @@ class CompilationEngine(object):
 
     def compileWhile(self):
 
-        L1 = self.newLabel
-        L2 = self.newLabel
+        newLabel = self.newLabel 
+        L1 = 'WHILE_TRUE_{}'.format(newLabel)
+        L2 = 'WHILE_FALSE{}'.format(newLabel)
 
         # while label - L1
         self.vmWriter.writeLabel(L1)
@@ -435,9 +456,10 @@ class CompilationEngine(object):
         self.tokenizer.advance()
 
     def compileIf(self):
-
-        L1 = self.newLabel
-        L2 = self.newLabel
+        
+        newLabel = self.newLabel
+        L1 = "IF_{}".format(newLabel)
+        L2 = "ELSE_{}".format(newLabel)
 
         # if 
         self.tokenizer.advance()
@@ -525,7 +547,7 @@ class CompilationEngine(object):
                 self.vmWriter.writePush("constant", "1")
                 self.vmWriter.writeArithmetic("neg")
 
-            elif self.tokenizer.keyWord == 'false':
+            elif self.tokenizer.keyWord in ['false', 'null']:
                 self.vmWriter.writePush("constant", "0")
             else:
                 self.vmWriter.writePush("{}".format(self.tokenizer.keyWord))
@@ -626,7 +648,7 @@ class CompilationEngine(object):
         # Write unary ops
         opCollection.reverse()
         for op in opCollection:
-            self.vmWriter.writeArithmetic(OP_CONVERSION[op])
+            self.vmWriter.writeArithmetic(UNARY_OP_CONVERSION[op])
 
     def compileParameterList(self):
         paramList = True
